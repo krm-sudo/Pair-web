@@ -97,6 +97,13 @@ input::placeholder { color: var(--muted); opacity: .8; }
 .done-box p { margin: 0; }
 .done-box .sub { color: var(--muted); margin-top: 4px; font-size: 14px; }
 .footer-note { margin-top: 32px; color: var(--muted); font-size: 13px; }
+
+/* Pengaturan bot */
+.settings { margin-top: 28px; border-top: 1px solid var(--soft); padding-top: 14px; }
+.settings summary { cursor: pointer; font: 600 12px/1 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); padding: 6px 0; }
+.settings .row { display: flex; gap: 8px; }
+.settings .row .btn { margin-top: 0; }
+.settings .hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
 </style>
 </head>
 <body>
@@ -153,6 +160,20 @@ input::placeholder { color: var(--muted); opacity: .8; }
 			<p>Bot sudah tersambung.</p>
 			<p class="sub">Kamu bisa menutup sesi ini sekarang.</p>
 		</div>
+
+		<details class="settings" id="settings">
+			<summary>Pengaturan bot</summary>
+			<label class="label" for="botUrl">Alamat bot</label>
+			<input id="botUrl" type="url" inputmode="url" placeholder="http://IP-SERVER:PORT" autocomplete="off" autocapitalize="off" spellcheck="false">
+			<label class="label" for="botSecret">Secret bot</label>
+			<input id="botSecret" type="password" placeholder="minimal 16 karakter" autocomplete="off" autocapitalize="off" spellcheck="false">
+			<div class="row">
+				<button class="btn" id="saveSettingsBtn" type="button">Simpan</button>
+				<button class="btn secondary" id="clearSettingsBtn" type="button">Hapus</button>
+			</div>
+			<p class="hint">Disimpan di browser HP ini saja. Kosong = pakai pengaturan dari server.</p>
+			<p class="msg" id="settingsMsg"></p>
+		</details>
 
 		<button class="btn secondary" id="logoutBtn" type="button">Tutup sesi</button>
 	</section>
@@ -211,11 +232,26 @@ function setStep(n) {
 	});
 }
 
+// Alamat dan secret bot dari pengaturan browser. Dikirim hanya untuk endpoint bot.
+function botHeaders() {
+	const h = {};
+	try {
+		const url = localStorage.getItem('botUrl') || '';
+		const secret = localStorage.getItem('botSecret') || '';
+		if (url) h['x-bot-url'] = encodeURIComponent(url);
+		if (secret) h['x-bot-secret'] = encodeURIComponent(secret);
+	}
+	catch { }
+	return h;
+}
+
 async function api(url, method = 'GET', body) {
+	const headers = body ? { 'content-type': 'application/json' } : {};
+	if (url === '/api/status' || url === '/api/pair') Object.assign(headers, botHeaders());
 	const res = await fetch(url, {
 		method,
 		credentials: 'same-origin',
-		headers: body ? { 'content-type': 'application/json' } : {},
+		headers,
 		body: body ? JSON.stringify(body) : undefined,
 	});
 	const data = await res.json().catch(() => ({}));
@@ -313,8 +349,50 @@ $('logoutBtn').addEventListener('click', async () => {
 	showLogin('Sesi ditutup.');
 });
 
+// Pengaturan bot dari browser.
+function loadSettingsForm() {
+	try {
+		$('botUrl').value = localStorage.getItem('botUrl') || '';
+		$('botSecret').value = localStorage.getItem('botSecret') || '';
+	}
+	catch { }
+}
+
+function settingsMsg(text, isErr = false) {
+	$('settingsMsg').textContent = text;
+	$('settingsMsg').classList.toggle('err', isErr);
+}
+
+$('saveSettingsBtn').addEventListener('click', async () => {
+	const url = $('botUrl').value.trim().replace(/\/+$/, '');
+	const secret = $('botSecret').value.trim();
+	if (url && !/^https?:\/\/[^\s/]+/.test(url)) return settingsMsg('Alamat bot harus diawali http:// atau https://', true);
+	if (secret && secret.length < 16) return settingsMsg('Secret minimal 16 karakter.', true);
+	try {
+		if (url) localStorage.setItem('botUrl', url); else localStorage.removeItem('botUrl');
+		if (secret) localStorage.setItem('botSecret', secret); else localStorage.removeItem('botSecret');
+		settingsMsg('Tersimpan.');
+	}
+	catch {
+		return settingsMsg('Gagal menyimpan di browser ini.', true);
+	}
+	await refreshStatus();
+});
+
+$('clearSettingsBtn').addEventListener('click', async () => {
+	try {
+		localStorage.removeItem('botUrl');
+		localStorage.removeItem('botSecret');
+	}
+	catch { }
+	loadSettingsForm();
+	settingsMsg('Pengaturan browser dihapus. Sekarang pakai pengaturan server.');
+	await refreshStatus();
+});
+
 (async function init() {
-	const res = await fetch('/api/status', { credentials: 'same-origin' });
+	loadSettingsForm();
+	const res = await fetch('/api/status', { credentials: 'same-origin', headers: botHeaders() });
 	if (res.status === 401) return showLogin();
 	showApp();
 	await refreshStatus();
