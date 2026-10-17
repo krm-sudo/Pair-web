@@ -49,11 +49,11 @@ h1 { font-size: clamp(32px, 9vw, 42px); line-height: 1.02; letter-spacing: -0.03
 /* Label dan input */
 .label { display: block; font: 500 12px/1 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin: 18px 0 8px; }
 input {
-	width: 100%; padding: 14px 16px; font-size: 16px; color: var(--ink);
+	width: 100%; padding: 14px 16px; font-size: 16px; color: var(--ink); font-weight: 500;
 	background: var(--surface); border: 1.5px solid var(--line); border-radius: 10px; outline: none;
 }
 input:focus { box-shadow: 0 0 0 3px var(--soft); }
-input::placeholder { color: var(--muted); opacity: .8; }
+input::placeholder { color: var(--muted); opacity: .8; font-weight: 500; }
 
 /* Tombol */
 .btn {
@@ -62,6 +62,9 @@ input::placeholder { color: var(--muted); opacity: .8; }
 }
 .btn:disabled { opacity: .55; cursor: default; }
 .btn.secondary { background: transparent; color: var(--ink); border: 1.5px solid var(--line); }
+.row { display: flex; gap: 10px; margin-top: 16px; }
+.row .btn { margin: 0; flex: 1 1 0; }
+.link-btn { background: none; border: 0; padding: 0; margin-top: 12px; color: var(--ink); font-size: 14px; font-weight: 600; text-decoration: underline; cursor: pointer; }
 
 /* Kartu */
 .card { margin-top: 8px; }
@@ -73,6 +76,7 @@ input::placeholder { color: var(--muted); opacity: .8; }
 .badge.ok { color: var(--ok); }
 .badge.warn { color: var(--warn); }
 .detail { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
+.target { color: var(--muted); font: 500 12px/1.4 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; margin: 6px 0 0; word-break: break-all; }
 
 /* Langkah */
 .steps { list-style: none; padding: 0; margin: 20px 0 0; border-top: 1px solid var(--soft); }
@@ -98,25 +102,7 @@ input::placeholder { color: var(--muted); opacity: .8; }
 .done-box p { margin: 0; }
 .done-box .sub { color: var(--muted); margin-top: 4px; font-size: 14px; }
 .footer-note { margin-top: 32px; color: var(--muted); font-size: 13px; }
-
-/* Pengaturan bot */
-.settings { margin-top: 32px; border-top: 1px solid var(--soft); }
-.settings summary {
-	list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between;
-	padding: 18px 0; font: 600 12px/1 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-	letter-spacing: .18em; text-transform: uppercase; color: var(--muted);
-}
-.settings summary::-webkit-details-marker { display: none; }
-.settings summary::after { content: "+"; font-size: 18px; line-height: 1; color: var(--ink); }
-.settings[open] summary::after { content: "–"; }
-.settings[open] { padding-bottom: 4px; }
-.settings input { font-family: inherit; font-weight: 500; }
-.settings .label:first-of-type { margin-top: 0; }
-.settings .row { display: flex; gap: 10px; margin-top: 20px; }
-.settings .row .btn { margin: 0; flex: 1 1 0; }
-.settings .hint { color: var(--muted); font-size: 13px; margin: 14px 0 0; }
-.settings .msg { min-height: 0; margin: 10px 0 0; }
-.settings + #logoutBtn { margin-top: 28px; }
+#logoutBtn { margin-top: 28px; }
 </style>
 </head>
 <body>
@@ -141,6 +127,22 @@ input::placeholder { color: var(--muted); opacity: .8; }
 		<p class="msg" id="loginMsg"></p>
 	</section>
 
+	<!-- Pengaturan bot: wajib diisi dulu sebelum bisa pairing -->
+	<section id="setupCard" hidden>
+		<h1>Pilih bot dulu.</h1>
+		<p class="lead">Isi alamat dan secret bot yang mau dihubungkan. Pengaturan ini hanya dipakai di browser ini.</p>
+		<label class="label" for="botUrl">Alamat bot</label>
+		<input id="botUrl" type="url" inputmode="url" placeholder="http://IP-SERVER:PORT" autocomplete="off" autocapitalize="off" spellcheck="false">
+		<label class="label" for="botSecret">Secret bot</label>
+		<input id="botSecret" type="password" placeholder="minimal 16 karakter" autocomplete="off" autocapitalize="off" spellcheck="false">
+		<div class="row">
+			<button class="btn" id="saveSettingsBtn" type="button">Simpan &amp; cek</button>
+			<button class="btn secondary" id="cancelSettingsBtn" type="button" hidden>Batal</button>
+		</div>
+		<button class="btn secondary" id="clearSettingsBtn" type="button" hidden>Hapus pengaturan bot</button>
+		<p class="msg" id="settingsMsg"></p>
+	</section>
+
 	<!-- Halaman utama -->
 	<section id="appCard" hidden>
 		<h1>Hubungkan bot WhatsApp.</h1>
@@ -148,6 +150,8 @@ input::placeholder { color: var(--muted); opacity: .8; }
 
 		<div id="statusBadge" class="badge warn">Memuat</div>
 		<p class="detail" id="statusDetail"></p>
+		<p class="target" id="targetLine"></p>
+		<button class="link-btn" id="changeBotBtn" type="button">Ganti bot</button>
 
 		<div id="pairSection">
 			<ol class="steps" id="steps">
@@ -173,20 +177,6 @@ input::placeholder { color: var(--muted); opacity: .8; }
 			<p>Bot sudah tersambung.</p>
 			<p class="sub">Kamu bisa menutup sesi ini sekarang.</p>
 		</div>
-
-		<details class="settings" id="settings">
-			<summary>Pengaturan bot</summary>
-			<label class="label" for="botUrl">Alamat bot</label>
-			<input id="botUrl" type="url" inputmode="url" placeholder="http://IP-SERVER:PORT" autocomplete="off" autocapitalize="off" spellcheck="false">
-			<label class="label" for="botSecret">Secret bot</label>
-			<input id="botSecret" type="password" placeholder="minimal 16 karakter" autocomplete="off" autocapitalize="off" spellcheck="false">
-			<div class="row">
-				<button class="btn" id="saveSettingsBtn" type="button">Simpan</button>
-				<button class="btn secondary" id="clearSettingsBtn" type="button">Hapus</button>
-			</div>
-			<p class="hint">Disimpan di browser HP ini saja. Kosong = pakai pengaturan dari server.</p>
-			<p class="msg" id="settingsMsg"></p>
-		</details>
 
 		<button class="btn secondary" id="logoutBtn" type="button">Tutup sesi</button>
 	</section>
@@ -218,13 +208,28 @@ $('themeBtn').addEventListener('click', () => {
 function showLogin(msg = '') {
 	stopPolling();
 	$('appCard').hidden = true;
+	$('setupCard').hidden = true;
 	$('loginCard').hidden = false;
 	$('loginMsg').textContent = msg;
 }
 
+function showSetup(msg = '', isErr = false) {
+	stopPolling();
+	$('loginCard').hidden = true;
+	$('appCard').hidden = true;
+	$('setupCard').hidden = false;
+	loadSettingsForm();
+	const configured = hasBotSettings();
+	$('cancelSettingsBtn').hidden = !configured;
+	$('clearSettingsBtn').hidden = !configured;
+	settingsMsg(msg, isErr);
+}
+
 function showApp() {
 	$('loginCard').hidden = true;
+	$('setupCard').hidden = true;
 	$('appCard').hidden = false;
+	$('targetLine').textContent = `Bot: ${getStored('botUrl') || '-'}`;
 	startPolling();
 }
 
@@ -245,16 +250,20 @@ function setStep(n) {
 	});
 }
 
-// Alamat dan secret bot dari pengaturan browser. Dikirim hanya untuk endpoint bot.
+// Pengaturan bot dari browser. Tanpa ini, halaman pairing tidak dipakai.
+function getStored(key) {
+	try { return localStorage.getItem(key) || ''; }
+	catch { return ''; }
+}
+function hasBotSettings() {
+	return Boolean(getStored('botUrl') && getStored('botSecret'));
+}
 function botHeaders() {
 	const h = {};
-	try {
-		const url = localStorage.getItem('botUrl') || '';
-		const secret = localStorage.getItem('botSecret') || '';
-		if (url) h['x-bot-url'] = encodeURIComponent(url);
-		if (secret) h['x-bot-secret'] = encodeURIComponent(secret);
-	}
-	catch { }
+	const url = getStored('botUrl');
+	const secret = getStored('botSecret');
+	if (url) h['x-bot-url'] = encodeURIComponent(url);
+	if (secret) h['x-bot-secret'] = encodeURIComponent(secret);
 	return h;
 }
 
@@ -300,14 +309,29 @@ async function refreshStatus() {
 	}
 }
 
+function settingsMsg(text, isErr = false) {
+	$('settingsMsg').textContent = text;
+	$('settingsMsg').classList.toggle('err', isErr);
+}
+
+function loadSettingsForm() {
+	$('botUrl').value = getStored('botUrl');
+	$('botSecret').value = getStored('botSecret');
+}
+
 $('loginForm').addEventListener('submit', async e => {
 	e.preventDefault();
 	$('loginMsg').textContent = '';
 	try {
 		await api('/api/login', 'POST', { password: $('password').value });
 		$('password').value = '';
-		showApp();
-		await refreshStatus();
+		if (hasBotSettings()) {
+			showApp();
+			await refreshStatus();
+		}
+		else {
+			showSetup('Isi alamat dan secret bot dulu.');
+		}
 	}
 	catch (err) {
 		$('loginMsg').textContent = err.message;
@@ -315,8 +339,67 @@ $('loginForm').addEventListener('submit', async e => {
 	}
 });
 
+$('saveSettingsBtn').addEventListener('click', async () => {
+	const url = $('botUrl').value.trim().replace(/\/+$/, '');
+	const secret = $('botSecret').value.trim();
+	if (!/^https?:\/\/[^\s/]+/.test(url)) return settingsMsg('Alamat bot harus diawali http:// atau https://', true);
+	if (secret.length < 16) return settingsMsg('Secret minimal 16 karakter.', true);
+
+	const prevUrl = getStored('botUrl');
+	const prevSecret = getStored('botSecret');
+	const restore = () => {
+		try {
+			if (prevUrl) localStorage.setItem('botUrl', prevUrl); else localStorage.removeItem('botUrl');
+			if (prevSecret) localStorage.setItem('botSecret', prevSecret); else localStorage.removeItem('botSecret');
+		}
+		catch { }
+	};
+
+	try {
+		localStorage.setItem('botUrl', url);
+		localStorage.setItem('botSecret', secret);
+	}
+	catch {
+		return settingsMsg('Gagal menyimpan di browser ini.', true);
+	}
+
+	$('saveSettingsBtn').disabled = true;
+	settingsMsg('Mengecek koneksi ke bot...');
+	try {
+		await api('/api/status');
+		settingsMsg('');
+		showApp();
+		await refreshStatus();
+	}
+	catch (err) {
+		// Pengaturan dibatalkan kalau bot tidak bisa dicek, supaya tidak tercampur dengan bot lain.
+		restore();
+		if (!err.silent) settingsMsg(`Tidak tersambung: ${err.message} Pengaturan tidak disimpan.`, true);
+	}
+	finally {
+		$('saveSettingsBtn').disabled = false;
+	}
+});
+
+$('cancelSettingsBtn').addEventListener('click', () => {
+	showApp();
+	refreshStatus();
+});
+
+$('clearSettingsBtn').addEventListener('click', () => {
+	try {
+		localStorage.removeItem('botUrl');
+		localStorage.removeItem('botSecret');
+	}
+	catch { }
+	showSetup('Pengaturan dihapus. Isi lagi untuk memakai bot.');
+});
+
+$('changeBotBtn').addEventListener('click', () => showSetup(''));
+
 $('pairForm').addEventListener('submit', async e => {
 	e.preventDefault();
+	if (!hasBotSettings()) return showSetup('Isi alamat dan secret bot dulu.', true);
 	$('pairBtn').disabled = true;
 	$('pairMsg').classList.remove('err');
 	$('pairMsg').textContent = 'Meminta kode...';
@@ -362,51 +445,10 @@ $('logoutBtn').addEventListener('click', async () => {
 	showLogin('Sesi ditutup.');
 });
 
-// Pengaturan bot dari browser.
-function loadSettingsForm() {
-	try {
-		$('botUrl').value = localStorage.getItem('botUrl') || '';
-		$('botSecret').value = localStorage.getItem('botSecret') || '';
-	}
-	catch { }
-}
-
-function settingsMsg(text, isErr = false) {
-	$('settingsMsg').textContent = text;
-	$('settingsMsg').classList.toggle('err', isErr);
-}
-
-$('saveSettingsBtn').addEventListener('click', async () => {
-	const url = $('botUrl').value.trim().replace(/\/+$/, '');
-	const secret = $('botSecret').value.trim();
-	if (url && !/^https?:\/\/[^\s/]+/.test(url)) return settingsMsg('Alamat bot harus diawali http:// atau https://', true);
-	if (secret && secret.length < 16) return settingsMsg('Secret minimal 16 karakter.', true);
-	try {
-		if (url) localStorage.setItem('botUrl', url); else localStorage.removeItem('botUrl');
-		if (secret) localStorage.setItem('botSecret', secret); else localStorage.removeItem('botSecret');
-		settingsMsg('Tersimpan.');
-	}
-	catch {
-		return settingsMsg('Gagal menyimpan di browser ini.', true);
-	}
-	await refreshStatus();
-});
-
-$('clearSettingsBtn').addEventListener('click', async () => {
-	try {
-		localStorage.removeItem('botUrl');
-		localStorage.removeItem('botSecret');
-	}
-	catch { }
-	loadSettingsForm();
-	settingsMsg('Pengaturan browser dihapus. Sekarang pakai pengaturan server.');
-	await refreshStatus();
-});
-
 (async function init() {
-	loadSettingsForm();
 	const res = await fetch('/api/status', { credentials: 'same-origin', headers: botHeaders() });
 	if (res.status === 401) return showLogin();
+	if (!hasBotSettings()) return showSetup('Isi alamat dan secret bot dulu.');
 	showApp();
 	await refreshStatus();
 })();
