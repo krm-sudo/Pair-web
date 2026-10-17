@@ -24,6 +24,7 @@
 	--accent: #3fbf7f; --accent-ink: #0f1a13; --ok: #3fbf7f; --warn: #e0a24a; --bad: #e26b53;
 }
 * { box-sizing: border-box; }
+button, input { font-family: inherit; }
 [hidden] { display: none !important; }
 html, body { margin: 0; }
 body {
@@ -99,11 +100,23 @@ input::placeholder { color: var(--muted); opacity: .8; }
 .footer-note { margin-top: 32px; color: var(--muted); font-size: 13px; }
 
 /* Pengaturan bot */
-.settings { margin-top: 28px; border-top: 1px solid var(--soft); padding-top: 14px; }
-.settings summary { cursor: pointer; font: 600 12px/1 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); padding: 6px 0; }
-.settings .row { display: flex; gap: 8px; }
-.settings .row .btn { margin-top: 0; }
-.settings .hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+.settings { margin-top: 32px; border-top: 1px solid var(--soft); }
+.settings summary {
+	list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+	padding: 18px 0; font: 600 12px/1 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+	letter-spacing: .18em; text-transform: uppercase; color: var(--muted);
+}
+.settings summary::-webkit-details-marker { display: none; }
+.settings summary::after { content: "+"; font-size: 18px; line-height: 1; color: var(--ink); }
+.settings[open] summary::after { content: "–"; }
+.settings[open] { padding-bottom: 4px; }
+.settings input { font-family: inherit; font-weight: 500; }
+.settings .label:first-of-type { margin-top: 0; }
+.settings .row { display: flex; gap: 10px; margin-top: 20px; }
+.settings .row .btn { margin: 0; flex: 1 1 0; }
+.settings .hint { color: var(--muted); font-size: 13px; margin: 14px 0 0; }
+.settings .msg { min-height: 0; margin: 10px 0 0; }
+.settings + #logoutBtn { margin-top: 28px; }
 </style>
 </head>
 <body>
