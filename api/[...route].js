@@ -1,14 +1,32 @@
 // Semua endpoint web pairing dalam satu file: /api/login, /api/logout, /api/status, /api/pair.
 const crypto = require('node:crypto');
 
-const WA_API_URL = String(process.env.WA_API_URL || '').trim().replace(/\/+$/, '');
-const WA_API_SECRET = String(process.env.WA_API_SECRET || '').trim();
+const ENV_BOT_URL = String(process.env.WA_API_URL || '').trim().replace(/\/+$/, '');
+const ENV_BOT_SECRET = String(process.env.WA_API_SECRET || '').trim();
 const WEB_PASSWORD = String(process.env.WEB_PASSWORD || '');
 const SESSION_KEY = process.env.SESSION_SECRET || crypto.createHash('sha256').update(`session:${WEB_PASSWORD}`).digest('hex');
 const SESSION_MS = 2 * 60 * 60 * 1000;
 
-function configOk() {
-	return /^https?:\/\//.test(WA_API_URL) && WA_API_SECRET.length >= 16 && WEB_PASSWORD.length >= 12;
+function webOk() {
+	return WEB_PASSWORD.length >= 12;
+}
+
+// Alamat dan secret bot: pakai yang dikirim browser (diisi di halaman web).
+// Kalau kosong, pakai nilai dari env Vercel.
+// Secret tidak pernah dikirim mentah ke bot, hanya dipakai untuk membuat tanda tangan.
+function botConfig(req) {
+	let url = ENV_BOT_URL;
+	let secret = ENV_BOT_SECRET;
+	try {
+		const hUrl = req.headers['x-bot-url'];
+		const hSecret = req.headers['x-bot-secret'];
+		if (hUrl) url = decodeURIComponent(String(hUrl)).trim().replace(/\/+$/, '');
+		if (hSecret) secret = decodeURIComponent(String(hSecret)).trim();
+	}
+	catch { return null; }
+	if (!/^https?:\/\/[^\s/]+/.test(url) || url.length > 300) return null;
+	if (secret.length < 16 || secret.length > 300) return null;
+	return { url, secret };
 }
 
 function send(res, status, body, type = 'application/json; charset=utf-8', extraHeaders = {}) {
@@ -71,20 +89,20 @@ function isLoggedIn(req) {
 	return given.length === expected.length && crypto.timingSafeEqual(given, expected);
 }
 
-function signFor(method, pathname, bodyBuf) {
+function signFor(secret, method, pathname, bodyBuf) {
 	const ts = String(Date.now());
 	const bodyHash = crypto.createHash('sha256').update(bodyBuf).digest('hex');
-	const sig = crypto.createHmac('sha256', WA_API_SECRET)
+	const sig = crypto.createHmac('sha256', secret)
 		.update(`${ts}\n${method}\n${pathname}\n${bodyHash}`).digest('hex');
 	return { 'x-wa-ts': ts, 'x-wa-sig': sig };
 }
 
-async function callBot(method, botPath, body) {
+async function callBot(cfg, method, botPath, body) {
 	const bodyBuf = body === undefined ? Buffer.alloc(0) : Buffer.from(JSON.stringify(body));
-	const headers = { ...signFor(method, botPath, bodyBuf) };
+	const headers = { ...signFor(cfg.secret, method, botPath, bodyBuf) };
 	if (body !== undefined) headers['content-type'] = 'application/json';
 	try {
-		const res = await fetch(WA_API_URL + botPath, {
+		const res = await fetch(cfg.url + botPath, {
 			method,
 			headers,
 			body: body === undefined ? undefined : bodyBuf,
@@ -98,12 +116,12 @@ async function callBot(method, botPath, body) {
 	}
 	catch (err) {
 		console.error('[web] bot tidak bisa dihubungi:', err.name, err.message);
-		return { status: 502, data: { error: 'Bot tidak bisa dihubungi. Cek WA_API_URL dan pastikan bot sedang jalan.' } };
+		return { status: 502, data: { error: 'Bot tidak bisa dihubungi. Cek alamat bot dan pastikan bot sedang jalan.' } };
 	}
 }
 
 async function login(req, res) {
-	if (!configOk()) return send(res, 500, { error: 'Environment variable belum lengkap.' });
+	if (!webOk()) return send(res, 500, { error: 'Environment variable belum lengkap.' });
 	try {
 		const body = await readBody(req);
 		if (!passwordOk(body.password)) return send(res, 401, { error: 'Password salah.' });
@@ -119,9 +137,11 @@ async function logout(req, res) {
 }
 
 async function status(req, res) {
-	if (!configOk()) return send(res, 500, { error: 'Environment variable belum lengkap.' });
+	if (!webOk()) return send(res, 500, { error: 'Environment variable belum lengkap.' });
 	if (!isLoggedIn(req)) return send(res, 401, { error: 'Belum login.' });
-	const out = await callBot('GET', '/tg-api/status');
+	const cfg = botConfig(req);
+	if (!cfg) return send(res, 400, { error: 'Alamat bot atau secret belum diisi / tidak valid.' });
+	const out = await callBot(cfg, 'GET', '/tg-api/status');
 	// Bot membungkus hasil sebagai { ok, data: {...} }. Buka lapisan itu supaya front end
 	// membaca s.online langsung. Kalau bentuknya sudah datar, pakai apa adanya.
 	const body = out.data && out.data.ok === true && out.data.data ? out.data.data : out.data;
@@ -129,14 +149,16 @@ async function status(req, res) {
 }
 
 async function pair(req, res) {
-	if (!configOk()) return send(res, 500, { error: 'Environment variable belum lengkap.' });
+	if (!webOk()) return send(res, 500, { error: 'Environment variable belum lengkap.' });
 	if (!isLoggedIn(req)) return send(res, 401, { error: 'Belum login.' });
+	const cfg = botConfig(req);
+	if (!cfg) return send(res, 400, { error: 'Alamat bot atau secret belum diisi / tidak valid.' });
 	try {
 		const input = await readBody(req);
 		const number = String(input.number || '').replace(/\D/g, '');
 		if (!/^\d{10,15}$/.test(number))
 			return send(res, 400, { error: 'Nomor tidak valid. Contoh: 628123456789' });
-		const out = await callBot('POST', '/tg-api/pair', { number });
+		const out = await callBot(cfg, 'POST', '/tg-api/pair', { number });
 		return send(res, out.status, out.data);
 	}
 	catch (err) {
