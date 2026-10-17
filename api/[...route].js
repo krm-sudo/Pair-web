@@ -122,7 +122,10 @@ async function status(req, res) {
 	if (!configOk()) return send(res, 500, { error: 'Environment variable belum lengkap.' });
 	if (!isLoggedIn(req)) return send(res, 401, { error: 'Belum login.' });
 	const out = await callBot('GET', '/tg-api/status');
-	return send(res, out.status, out.data);
+	// Bot membungkus hasil sebagai { ok, data: {...} }. Buka lapisan itu supaya front end
+	// membaca s.online langsung. Kalau bentuknya sudah datar, pakai apa adanya.
+	const body = out.data && out.data.ok === true && out.data.data ? out.data.data : out.data;
+	return send(res, out.status, body);
 }
 
 async function pair(req, res) {
